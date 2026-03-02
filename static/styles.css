@@ -1,0 +1,9 @@
+.row{
+    display: flex;
+    justify-content: space-between;
+    width: 250px; 
+    margin-bottom: 8px;
+}
+
+
+body { background: pink; }

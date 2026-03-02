@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summary for {{ agent_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+
+</head>
+<body>
+    <div id="agent_info">
+        <h1>Agent</h1>
+
+        <div class="row">
+            <h2>Faction:</h2>
+            <p>{{ faction }}</p>
+        </div>
+
+        <div class="row">
+            <h2>Credits:</h2>
+            <p>{{ credits }}</p>
+        </div>
+    </div>
+
+    <div class="contracts">
+        <table>
+            <tr>
+                <th>Faction</th>
+                <th>Type</th>
+                <th>Deadline</th>
+                <th>Goods</th>
+                <th>Destination</th>
+                <th>Owing</th>
+            </tr>
+            
+            {% for contract in contracts %}
+                <tr>
+                    <td>{{ contract.faction }}</td>
+                    <td>{{ contract.type }}</td>
+                    <td>{{ contract.deadline }}</td>
+                    <td>{{ contract.goods }}</td>
+                    <td>{{ contract.destination }}</td>
+                    <td>{{ contract.owing }}</td>
+                </tr>
+            {% endfor %}
+
+        </table>
+    </div>
+
+    
+</body>
+</html>
