@@ -1,7 +1,9 @@
 import json
 import requests
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from my_classes import *
+import os.path
+
 
 #------------------------CONSTANTS------------------------#
 API_STATUS = "https://api.spacetraders.io/v2/"
@@ -10,10 +12,41 @@ CLAIM_USER = "https://api.spacetraders.io/v2/register"
 MY_ACCOUNT = "https://api.spacetraders.io/v2/my/agent"
 MY_CONTRACTS = "https://api.spacetraders.io/v2/my/contracts"
 MY_SHIPS = "https://api.spacetraders.io/v2/my/ships"
+AGENT_FILE = "agents.json"
 
-#------------------------Test data for now init-------------------------#
+#------------------------Test data for now -------------------------#
 error_message = "This is an error message"
 agent_name, faction, credits = "saurabh", "test faction", 6767
+
+def main():
+    app = Flask(__name__)
+
+    @app.route("/", methods =["GET", "POST"])
+    def index():
+        if request.method == "POST":
+            username = request.form.get("username")
+            if username:
+                response = requests.post(CLAIM_USER, json={"symbol": username})
+                if response.status_code == 201:
+                    json_result = response.json()
+                    store_agent_login(json_result["data"])
+                    print(json_result)
+                else:
+                    print(f"Error claiming user: {response.text}")
+        return render_template("index.html")
+
+
+    @app.route("/error")
+    def error():
+        return render_template("error.html")
+
+    @app.route("/summary")
+    def summary():
+        return render_template("summary.html", agent_name=agent_name, contracts= [my_contracts, my_contracts])
+
+    if __name__ == "__main__":
+        app.run(debug=True)
+
 
 #test contract to test with summary page
 my_contracts = Contracts({
@@ -25,20 +58,21 @@ my_contracts = Contracts({
     "owing" : 1000
 })
 
-app = Flask(__name__)
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+def load_player_logins():
+    known_agents = {}
 
+    if os.path.exists(AGENT_FILE):
+        with open(AGENT_FILE) as json_agents:
+            known_agents = json.load(json_agents)
 
-@app.route("/error")
-def error():
-    return render_template("error.html")
+    return known_agents
 
-@app.route("/summary")
-def summary():
-    return render_template("summary.html", agent_name=agent_name, contracts= [my_contracts, my_contracts])
+def store_agent_login(json_result):
+    known_agents = load_player_logins()
+    known_agents[json_result["symbol"]] = json_result["token"]
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    with open(AGENT_FILE, "w") as json_agents:
+        json.dump(known_agents, json_agents)
+
+main()
