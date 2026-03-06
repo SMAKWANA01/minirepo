@@ -15,15 +15,25 @@ MY_SHIPS = "https://api.spacetraders.io/v2/my/ships"
 
 class Contracts():
     def __init__(self, data):
-        self.faction = data["faction"]
+        self.id = data["id"]
+        self.faction = data["factionSymbol"]
         self.type = data["type"]
-        self.deadline = data["deadline"]
-        self.goods = data["goods"]
-        self.destination = data["destination"]
-        self.owing = data["owing"]
+        self.deadline = data["terms"]["deadline"]
+        self.paymet_onAccepted = data["terms"]["onAccepted"]
+        self.paymet_onFulfilled = data["terms"]["onFulfilled"]
 
+        self.accepted = data["accepted"]
+        self.fulfilled = data["fulfilled"]
+        self.expiration = data["expiration"]
+        self.deadlineToAccept = data["deadlineToAccept"]
 
+        #These are for where we need to deliver!
+        self.tradeSymbol = data["deliver"]["tradeSymbol"]
+        self.destinationSymbol = data["deliver"]["destinationSymbol"]
+        self.unitsRequired = data["deliver"]["unitsRequired"]
+        self.unitsFulfilled = data["deliver"]["unitsFulfilled"]
 
+        
 
 
 class Agent:
