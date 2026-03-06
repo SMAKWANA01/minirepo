@@ -2,8 +2,6 @@ import json
 import requests
 from flask import Flask, render_template, request
 from my_classes import *
-import os.path
-
 
 #------------------------CONSTANTS------------------------#
 API_STATUS = "https://api.spacetraders.io/v2/"
@@ -12,43 +10,12 @@ CLAIM_USER = "https://api.spacetraders.io/v2/register"
 MY_ACCOUNT = "https://api.spacetraders.io/v2/my/agent"
 MY_CONTRACTS = "https://api.spacetraders.io/v2/my/contracts"
 MY_SHIPS = "https://api.spacetraders.io/v2/my/ships"
-AGENT_FILE = "agents.json"
 
-#------------------------Test data for now -------------------------#
+#------------------------Test data for now init-------------------------#
 error_message = "This is an error message"
-agent_name, faction, credits = "saurabh", "test faction", 6767
-
-def main():
-    app = Flask(__name__)
-
-    @app.route("/", methods =["GET", "POST"])
-    def index():
-        if request.method == "POST":
-            username = request.form.get("username")
-            if username:
-                response = requests.post(CLAIM_USER, json={"symbol": username})
-                if response.status_code == 201:
-                    json_result = response.json()
-                    store_agent_login(json_result["data"])
-                    print(json_result)
-                else:
-                    print(f"Error claiming user: {response.text}")
-        return render_template("index.html")
-
-
-    @app.route("/error")
-    def error():
-        return render_template("error.html")
-
-    @app.route("/summary")
-    def summary():
-        return render_template("summary.html", agent_name=agent_name, contracts= [my_contracts, my_contracts])
-
-    if __name__ == "__main__":
-        app.run(debug=True)
-
-
+error_code = 67
 #test contract to test with summary page
+#TODO: replace with actual API thing
 my_contracts = Contracts({
     "faction":"best faction",
     "type" : "transport",
@@ -58,21 +25,33 @@ my_contracts = Contracts({
     "owing" : 1000
 })
 
+app = Flask(__name__)
 
-def load_player_logins():
-    known_agents = {}
+@app.route("/", methods = ["GET", "POST"])
+def index():
 
-    if os.path.exists(AGENT_FILE):
-        with open(AGENT_FILE) as json_agents:
-            known_agents = json.load(json_agents)
+    if request.method == "POST":
+        token = request.form.get("username")# This could be token or username.
+        
+        global agent
+        agent = Agent(token)
+        if agent.error:
+            return render_template("error.html", error_message=agent.error, error_code=400)
+        if not agent.get_agent_data():
+            return render_template("error.html", error_message=agent.error["message"], error_code=agent.error["status"])
 
-    return known_agents
+        return render_template("summary.html", agent_name=agent.symbol, contracts= [my_contracts, my_contracts])
+    
+    return render_template("index.html")
 
-def store_agent_login(json_result):
-    known_agents = load_player_logins()
-    known_agents[json_result["symbol"]] = json_result["token"]
 
-    with open(AGENT_FILE, "w") as json_agents:
-        json.dump(known_agents, json_agents)
+@app.route("/error")
+def error():
+    return render_template("error.html", error_message=error_message, error_code=error_code)
 
-main()
+@app.route("/summary")
+def summary():
+    return render_template("summary.html", agent=agent, contracts= [my_contracts, my_contracts])
+
+if __name__ == "__main__":
+    app.run(debug=True)
