@@ -29,7 +29,7 @@ class Contracts():
 class Agent:
     TOKEN_FILE = "agents.json"  
 
-    def __init__(self, token: str = ""):
+    def __init__(self,  token= ""):
         if token:
             self.token = token
             self._save_token(token)
@@ -79,8 +79,9 @@ class Agent:
             self.error = {
                 "error": True,
                 "status": response.status_code,
-                "message": response.text
+                "message": response.text   
             }
+            print(self.error)# Using this because its not working..
             return False
         
         data = response.json()["data"]

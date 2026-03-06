@@ -40,7 +40,7 @@ def index():
         if not agent.get_agent_data():
             return render_template("error.html", error_message=agent.error["message"], error_code=agent.error["status"])
 
-        return render_template("summary.html", agent_name=agent.symbol, contracts= [my_contracts, my_contracts])
+        return render_template("summary.html", agent=agent, contracts= [my_contracts, my_contracts])
     
     return render_template("index.html")
 
