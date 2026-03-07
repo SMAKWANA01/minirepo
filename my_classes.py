@@ -10,34 +10,48 @@ CLAIM_USER = "https://api.spacetraders.io/v2/register"
 MY_ACCOUNT = "https://api.spacetraders.io/v2/my/agent"
 MY_CONTRACTS = "https://api.spacetraders.io/v2/my/contracts"
 MY_SHIPS = "https://api.spacetraders.io/v2/my/ships"
+TOKEN_FILE = "agents.json" 
 
 
+class Contract():
+    def __init__(self, contract_id, token):
 
-class Contracts():
-    def __init__(self, data):
+        load = self._load_contract(contract_id, token)
+        data = load["data"]
+
         self.id = data["id"]
         self.faction = data["factionSymbol"]
         self.type = data["type"]
         self.deadline = data["terms"]["deadline"]
-        self.paymet_onAccepted = data["terms"]["onAccepted"]
-        self.paymet_onFulfilled = data["terms"]["onFulfilled"]
+        self.paymet_onAccepted = data["terms"]["payment"]["onAccepted"]
+        self.paymet_onFulfilled = data["terms"]["payment"]["onFulfilled"]
 
-        self.accepted = data["accepted"]
-        self.fulfilled = data["fulfilled"]
-        self.expiration = data["expiration"]
-        self.deadlineToAccept = data["deadlineToAccept"]
+        self.accepted = load["accepted"]
+        self.fulfilled = load["fulfilled"]
+        self.deadlineToAccept = load["deadlineToAccept"]
 
-        #These are for where we need to deliver!
-        self.tradeSymbol = data["deliver"]["tradeSymbol"]
-        self.destinationSymbol = data["deliver"]["destinationSymbol"]
-        self.unitsRequired = data["deliver"]["unitsRequired"]
-        self.unitsFulfilled = data["deliver"]["unitsFulfilled"]
+        #There may be many things to deliver, hence a list of dictionaries, with "tradeSymbol", "destinationSymbol", "unitsRequired", "unitsFulfilled"
+        #The units part is integers
+
+        self.deliver = data["terms"]["deliver"]
 
         
 
+        def _load_contract(self, contract_id, token):
+
+            response = requests.get(MY_CONTRACTS +f"/{contract_id}", headers={"Authorization": f"Bearer {token}"})
+
+
+            if response.status_code != 200:
+                print("Something went wrong, Agent class get_agent_data")
+                raise Exception(response.status_code, response.reason)
+            return response.json()
+
+            
+
 
 class Agent:
-    TOKEN_FILE = "agents.json"  
+ 
 
     def __init__(self,  token= ""):
         if token:
@@ -48,19 +62,25 @@ class Agent:
             if saved:
                 self.token = saved
             else:
-                self.error = "No token provided and no saved token found."
+                raise Exception(400, "Invalid token")
+            
         
-        self.error = None
-        self.accountId = None
-        self.symbol = None
-        self.headquarters = None
-        self.credits = None
-        self.faction = None
-        self.shipCount = None
+        data = self._get_agent_data()
+
+        self.accountId = data["accountId"]
+        self.symbol = data["symbol"]
+        self.headquarters = data["headquarters"]
+        self.credits = data["credits"]
+        self.faction = data["startingFaction"]
+        self.shipCount = data["shipCount"]
+
+        self.contracts = [Contract(contract["id"], token) for contract in data["contracts"]]
+        
 
     # Using internal functions 
     def _load_token(self):
-        if not os.path.exists(self.TOKEN_FILE):
+        if not os.path.exists(TOKEN_FILE):
+            #TODO: this is where we're breaking.
             return None
         
         try:
@@ -81,24 +101,19 @@ class Agent:
         return {"Authorization": f"Bearer {self.token}"}
 
     #NOT internal function, I'll call this once in main.
-    def get_agent_data(self):
+    def _get_agent_data(self):
         response = requests.get(MY_ACCOUNT, headers=self._headers())
 
         if response.status_code != 200:
-            print("Something went wrong, Agent class get_agent_data")
-            self.error = {
-                "error": True,
-                "status": response.status_code,
-                "message": response.text   
-            }
-            print(self.error)# Using this because its not working..
-            return False
+            raise Exception(response.status_code, response.reason)
         
         data = response.json()["data"]
-        self.accountId = data["accountId"]
-        self.symbol = data["symbol"]
-        self.headquarters = data["headquarters"]
-        self.credits = data["credits"]
-        self.faction = data["startingFaction"]
-        self.shipCount = data["shipCount"]
-        return True
+
+        response = requests.get(MY_CONTRACTS, headers=self._headers())
+
+        if response.status_code != 200:
+            raise Exception(response.status_code, response.reason)
+        
+        data2 = response.json()["data"]
+        data = {**data, "contracts": data2}
+        return data

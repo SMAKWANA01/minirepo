@@ -11,19 +11,10 @@ MY_ACCOUNT = "https://api.spacetraders.io/v2/my/agent"
 MY_CONTRACTS = "https://api.spacetraders.io/v2/my/contracts"
 MY_SHIPS = "https://api.spacetraders.io/v2/my/ships"
 
+
 #------------------------Test data for now init-------------------------#
 error_message = "This is an error message"
 error_code = 67
-#test contract to test with summary page
-#TODO: replace with actual API thing
-my_contracts = Contracts({
-    "faction":"best faction",
-    "type" : "transport",
-    "deadline" : "2024-06-30T23:59:00.000Z",
-    "goods" : "food",
-    "destination" : "earth",
-    "owing" : 1000
-})
 
 app = Flask(__name__)
 
@@ -34,16 +25,15 @@ def index():
         token = request.form.get("username")# This could be token or username.
         print(token)
         global agent
-        agent = Agent(token)
-        if agent.error:
-            return render_template("error.html", error_message=agent.error, error_code=400)
-        if not agent.get_agent_data():
-            return render_template("error.html", error_message=agent.error["message"], error_code=agent.error["status"])
-
-        return render_template("summary.html", agent=agent, contracts= [my_contracts, my_contracts])
+        try:
+            agent = Agent(token)
+        except Exception as e:
+            return render_template("error.html", error_code=e.args[0], error_message=e.args[1])
+        return render_template("summary.html", agent=agent)
+        
     
     return render_template("index.html")
-
+    
 
 @app.route("/error")
 def error():
@@ -51,7 +41,8 @@ def error():
 
 @app.route("/summary")
 def summary():
-    return render_template("summary.html", agent=agent, contracts= [my_contracts, my_contracts])
+
+    return render_template("summary.html", agent=agent)
 
 if __name__ == "__main__":
     app.run(debug=True)
