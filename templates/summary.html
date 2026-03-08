@@ -24,28 +24,33 @@
     </div>
 
     <div class="contracts">
-        <table>
-            <tr>
-                <th>Faction</th>
-                <th>Type</th>
-                <th>Deadline</th>
-                <th>Goods</th>
-                <th>Destination</th>
-                <th>Owing</th>
-            </tr>
-            
-            {% for contract in agent.contracts %}
-                <tr>
-                    <td>{{ contract.faction }}</td>
-                    <td>{{ contract.type }}</td>
-                    <td>{{ contract.deadline }}</td>
-                    <td>{{ contract.goods }}</td>
-                    <td>{{ contract.destination }}</td>
-                    <td>{{ contract.owing }}</td>
-                </tr>
+        {% for contract in agent.contracts %}
+        <div class="contract">
+            <p>Type: {{ contract.type }}</p>
+            <p>Faction: {{ contract.faction }}</p>
+            <p>Deadline: {{ contract.deadline }}</p>
+            <p>Payment on Accepted: {{ contract.paymet_onAccepted }}</p>
+            <p>Payment on Fulfilled: {{ contract.paymet_onFulfilled }}</p>
+
+            {% for delivery in contract.deliver %}
+                <p>Deliver {{ delivery.tradeSymbol }}</p>
+                <ul>
+                    <li>Destination: {{ delivery.destinationSymbol }}</li>
+                    <li>Owing {{ delivery.unitsRequired - delivery.unitsFulfilled }}</li>
+                </ul>
             {% endfor %}
 
-        </table>
+            {% if contract.fulfilled %}
+                <p>Status: Fulfilled</p>
+            {% elif contract.accepted %}
+                <p>Status: Accepted</p>
+            {% else %}
+                <p>Status: Not Accepted</p>
+            {% endif %}
+
+
+        </div>
+        {% endfor %}
     </div>
 
     <a href={{ url_for("index")}}>index</a>

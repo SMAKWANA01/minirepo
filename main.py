@@ -23,7 +23,6 @@ def index():
 
     if request.method == "POST":
         token = request.form.get("username")# This could be token or username.
-        print(token)
         global agent
         try:
             agent = Agent(token)

@@ -1,3 +1,10 @@
+:root{
+    --bg: #0a1d3d;
+    --accent : grey;
+    --accent2: red;
+}
+
+
 .row{
     display: flex;
     justify-content: space-between;
@@ -6,4 +13,24 @@
 }
 
 
-body { background: rgb(61, 121, 107); } 
+body { background: var(--bg); } 
+
+div table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+div th, div td {
+    text-align: center;
+}
+
+.contract {
+    background: var(--accent);
+    border: 2px solid var(--accent2);
+    border-radius: 8px;
+    padding: 8px;
+}
+
+h1, h2, p, a, li{
+    color: yellow
+}
