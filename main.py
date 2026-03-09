@@ -17,13 +17,12 @@ error_message = "This is an error message"
 error_code = 67
 
 app = Flask(__name__)
-
+agent = None
 @app.route("/", methods = ["GET", "POST"])
 def index():
 
     if request.method == "POST":
         token = request.form.get("username")# This could be token or username.
-        global agent
         try:
             agent = Agent(token)
         except Exception as e:
@@ -40,7 +39,16 @@ def error():
 
 @app.route("/summary")
 def summary():
+    return render_template("summary.html", agent=agent)
 
+@app.route("/contracts/<contract_id>", methods=["POST"])
+def accept_contract(contract_id):
+    for contract in agent.contracts:
+        if contract.id == contract_id:
+            try:
+                contract.accept()
+            except Exception as e:
+                return render_template("error.html", error_code=e.args[0], error_message=e.args[1])
     return render_template("summary.html", agent=agent)
 
 if __name__ == "__main__":

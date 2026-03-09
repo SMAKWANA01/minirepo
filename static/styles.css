@@ -24,6 +24,13 @@ div th, div td {
     text-align: center;
 }
 
+.contracts {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 per row, one fraction each */
+    gap: 20px;
+    width: 100%;
+}
+
 .contract {
     background: var(--accent);
     border: 2px solid var(--accent2);

@@ -13,7 +13,7 @@ MY_SHIPS = "https://api.spacetraders.io/v2/my/ships"
 TOKEN_FILE = "agents.json" 
 
 
-#---------HE FOLLOWING TWO FUNCTIONS ARTE COPIED FROM SIR'S TEMPLATE---------#
+#---------THE FOLLOWING TWO FUNCTIONS ARTE COPIED FROM SIR'S TEMPLATE---------#
 UTC_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
 DISPLAY_FORMAT = " %B, %Y"
 def parse_datetime(dt):
@@ -33,8 +33,10 @@ def format_datetime(dt_text):
 #------------------------CLASSES------------------------#
 class Contract():
     def __init__(self, contract_id, token):
+        
 
-        load = self._load_contract(contract_id, token)
+        self.token = token
+        load = self._load_contract(contract_id)
         data = load["data"]
 
         self.id = data["id"]
@@ -48,16 +50,17 @@ class Contract():
         self.fulfilled = data["fulfilled"]
         self.deadlineToAccept = data["deadlineToAccept"]
 
-        #There may be many things to deliver, hence a list of dictionaries, with "tradeSymbol", "destinationSymbol", "unitsRequired", "unitsFulfilled"
+        #There may be many things to deliver, hence a list of dictionaries, 
+        #with "tradeSymbol", "destinationSymbol", "unitsRequired", "unitsFulfilled"
         #The units part is integers
 
         self.deliver = data["terms"]["deliver"]
 
         
 
-    def _load_contract(self, contract_id, token):
+    def _load_contract(self, contract_id):
 
-        response = requests.get(MY_CONTRACTS +f"/{contract_id}", headers={"Authorization": f"Bearer {token}"})
+        response = requests.get(MY_CONTRACTS +f"/{contract_id}", headers={"Authorization": f"Bearer {self.token}"})
 
 
         if response.status_code != 200:
@@ -66,7 +69,19 @@ class Contract():
             raise Exception(response.status_code, response.reason)
         return response.json()
 
-            
+    #TODO: Is this just a procedure then ?
+    def accept(self):
+        response = requests.post(MY_CONTRACTS +f"/{self.id}/accept", headers={"Authorization": f"Bearer {self.token}"})
+        if response.status_code != 200:
+            print("Something went wrong, Agent class load_contract")
+            print(response.text)# Only for debugging
+            raise Exception(response.status_code, response.reason)
+        self.accepted = True
+        self.deadlineToAccept = None
+    
+    #TODO: get ship info, bring into cargo (from agent?) then fulfill contract.
+    #combine orbit with navigate
+
 
 
 class Agent:
