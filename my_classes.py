@@ -69,7 +69,7 @@ class Contract():
             raise Exception(response.status_code, response.reason)
         return response.json()
 
-    #TODO: Is this just a procedure then ?
+
     def accept(self):
         response = requests.post(MY_CONTRACTS +f"/{self.id}/accept", headers={"Authorization": f"Bearer {self.token}"})
         if response.status_code != 200:
@@ -79,9 +79,36 @@ class Contract():
         self.accepted = True
         self.deadlineToAccept = None
     
-    #TODO: get ship info, bring into cargo (from agent?) then fulfill contract.
-    #combine orbit with navigate
+    def fulfill(self, ship):
+#TODO:  1) orbit from current possition
+#       2)  Find waypoint of the nearest asteroid
+#       3) Looks like we have to survey otherwise itll take ages, if the survey gives deposit, use survey, otherwise mine whilst on cooldown
+#       Also, make sure to check all the available surveys and use the best one
+#       3)  Mine until we have enough resources
+#       4)  Fly to the destination
+#       5)  Deliver the resources, fulfill the contract
+        
+        pass
 
+class Ship:
+    def __init__(self, ship_id, token):
+        self.token = token
+        load = self._load_ship(ship_id)
+        data = load["data"]
+
+        self.symbol = data["symbol"]
+        
+        #TODO: add more attributes, like cargo, fuel, etc.
+
+    def _load_ship(self, ship_id):
+        response = requests.get(MY_SHIPS +f"/{ship_id}", headers={"Authorization": f"Bearer {self.token}"})
+
+        if response.status_code != 200:
+            print("Something went wrong, Agent class load_ship")
+            print(response.text)# Only for debugging
+            raise Exception(response.status_code, response.reason)
+        return response.json()
+    
 
 
 class Agent:
@@ -107,6 +134,7 @@ class Agent:
         self.shipCount = data["shipCount"]
 
         self.contracts = [Contract(contract["id"], self.token) for contract in data["contracts"]]
+        self.ships = [Ship(ship["symbol"], self.token) for ship in data["ships"]]
         
 
     # Using internal functions 
@@ -149,5 +177,13 @@ class Agent:
             raise Exception(response.status_code, response.reason)
         
         data2 = response.json()["data"]
-        data = {**data, "contracts": data2}
+
+        response = requests.get(MY_SHIPS, headers=self._headers())
+        if response.status_code != 200:
+            print("Something went wrong, Agent class get_agent_data, ships")
+            raise Exception(response.status_code, response.reason)
+        
+        data3 = response.json()["data"]
+
+        data = {**data, "contracts": data2, "ships": data3}
         return data
