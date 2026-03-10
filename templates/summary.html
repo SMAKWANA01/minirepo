@@ -23,9 +23,10 @@
         </div>
     </div>
 
-    <div class="contracts">
+    <div class="info">
         {% for contract in agent.contracts %}
         <div class="contract">
+            <h3 style="text-align: center;">CONTRACT:</h3>
             <p>Type: {{ contract.type }}</p>
             <p>Faction: {{ contract.faction }}</p>
             <p>Deadline: {{ contract.deadline }}</p>
@@ -54,6 +55,20 @@
 
         </div>
         {% endfor %}
+        {% for ship in agent.ships %}
+        <div class="ship">
+            <h3 style="text-align: center;">SHIP: {{ ship.symbol }}</h3>
+
+            <p>Location: {{ ship.system }} -> {{ ship.waypoint }}</p>
+            <p>Status: {{ ship.status }} ({{ ship.flight_mode }})</p>
+            <p> Crew: {{ ship.crew.current }} / {{ ship.crew.capacity }}</p>
+            <p> Fuel: {{ ship.fuel_current }} / {{ ship.fuel_capacity }}</p>
+            <p> Cargo: {{ ship.cargo_units }} / {{ ship.cargo_capacity }}</p>
+            <p> Engine Speed: {{ ship.engine.speed }}</p>
+            
+        </div>
+        {% endfor %}
+
     </div>
 
     <a href={{ url_for("index")}}>index</a>

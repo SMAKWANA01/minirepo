@@ -97,17 +97,53 @@ class Ship:
         data = load["data"]
 
         self.symbol = data["symbol"]
-        
-        #TODO: add more attributes, like cargo, fuel, etc.
+        self.registration = data["registration"]
+
+        # everything in nav has been unpacked.
+        self.nav = data["nav"]
+        self.system = data["nav"]["systemSymbol"]
+        self.waypoint = data["nav"]["waypointSymbol"]
+        self.route = data["nav"]["route"]
+        self.status = data["nav"]["status"]
+        self.flight_mode = data["nav"]["flightMode"]
+
+        # crew
+        self.crew = data["crew"]
+
+        # components
+        self.frame = data["frame"]
+        self.reactor = data["reactor"]
+        self.engine = data["engine"]
+        self.modules = data["modules"]
+        self.mounts = data["mounts"]
+
+        # cargo
+        cargo = data["cargo"]
+        self.cargo_capacity = cargo["capacity"]
+        self.cargo_units = cargo["units"]
+        self.cargo_inventory = cargo["inventory"]
+
+        # fuel
+        fuel = data["fuel"]
+        self.fuel_current = fuel["current"]
+        self.fuel_capacity = fuel["capacity"]
+        self.fuel_consumed = fuel["consumed"]
+
+        self.cooldown = data["cooldown"]
 
     def _load_ship(self, ship_id):
-        response = requests.get(MY_SHIPS +f"/{ship_id}", headers={"Authorization": f"Bearer {self.token}"})
+        response = requests.get(
+            MY_SHIPS + f"/{ship_id}",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
 
         if response.status_code != 200:
             print("Something went wrong, Agent class load_ship")
-            print(response.text)# Only for debugging
+            print(response.text)
             raise Exception(response.status_code, response.reason)
+
         return response.json()
+
     
 
 
