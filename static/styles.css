@@ -4,6 +4,8 @@
     --accent2: red;
 
     --alt_accent : rgb(83, 83, 83);
+    --header_accent: #e2c545;
+    --text: yellow;
 }
 
 
@@ -17,14 +19,6 @@
 
 body { background: var(--bg); } 
 
-div table {
-    border-collapse: collapse;
-    width: 100%;
-}
-
-div th, div td {
-    text-align: center;
-}
 
 .info {
     display: grid;
@@ -55,6 +49,11 @@ div th, div td {
     box-shadow: 0 12px 24px rgba(0,0,0,0.25);
 }
 
-h1, h2, p, a, li{
-    color: yellow
+p, a, li{
+    color: var(--text)
+}
+
+h1, h2, h3{
+    font-weight: bolder;
+    color: var(--header_accent)
 }

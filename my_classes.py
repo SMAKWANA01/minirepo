@@ -10,6 +10,7 @@ CLAIM_USER = "https://api.spacetraders.io/v2/register"
 MY_ACCOUNT = "https://api.spacetraders.io/v2/my/agent"
 MY_CONTRACTS = "https://api.spacetraders.io/v2/my/contracts"
 MY_SHIPS = "https://api.spacetraders.io/v2/my/ships"
+SYSTEMS = "https://api.spacetraders.io/v2/systems"
 TOKEN_FILE = "agents.json" 
 
 
@@ -81,19 +82,71 @@ class Contract():
     
     def fulfill(self, ship):
 #TODO:  1) orbit from current possition
-#       2)  Find waypoint of the nearest asteroid
+#       2)  Find waypoint of the nearest asteroid, navigate there
 #       3) Looks like we have to survey otherwise itll take ages, if the survey gives deposit, use survey, otherwise mine whilst on cooldown
 #       Also, make sure to check all the available surveys and use the best one
-#       3)  Mine until we have enough resources
-#       4)  Fly to the destination
-#       5)  Deliver the resources, fulfill the contract
+#       4)  Mine until we have enough resources
+#       5)  Fly to the destination
+#       6/7)  Deliver the resources, fulfill the contract
+        if ship.status != "IN_ORBIT":
+            print("Going to orbit")
+            ship.orbit()
         
-        pass
+        waypoints = self.find_waypoints(ship.symbol)
+        
+        for _waypoint in waypoints:
+            if _waypoint["type"] in ["ENGINEERED_ASTEROID", "ASTEROID"]:
+                waypoint = _waypoint
+                break
+        else:
+            raise Exception("", "No valid waypoints were found, cannot continue")
+
+        ship.navigate(waypoint)
+
+
+
+
+        # SURVEY
+        surveys = self.create_survey(ship.symbol)["surveys"]
+        for survey in surveys:
+            pass
+        #TODO: FIND WHICH SURVEY HAS THE HIGHEST YIELD. 
+            
+    
+    def create_survey(self, ship_symbol):
+        response = requests.get(
+            MY_SHIPS + f"/{ship_symbol}/survey",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        if response.status_code != 200:
+            print("Something went wrong, orbit class ship")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+        
+        return response
+
+    def find_waypoints(self, ship_symbol):
+        response = requests.get(
+            SYSTEMS + f"/{ship_symbol}",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        if response.status_code != 200:
+            print("Something went wrong, orbit class ship")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+        
+        return response["waypoints"]
+    
 
 class Ship:
     def __init__(self, ship_id, token):
         self.token = token
-        load = self._load_ship(ship_id)
+        self.ship_id = ship_id
+        self._registration()
+
+    def _registration(self):
+        
+        load = self._load_ship(self.ship_id)
         data = load["data"]
 
         self.symbol = data["symbol"]
@@ -143,6 +196,33 @@ class Ship:
             raise Exception(response.status_code, response.reason)
 
         return response.json()
+
+    def orbit(self):
+        response = requests.post(
+            MY_SHIPS + f"/{self.symbol}/orbit",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        if response.status_code != 200:
+            print("Something went wrong, orbit class ship")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+        
+        self._registration()
+    
+    def navigate(self, waypoint):
+        response = requests.post(
+            MY_SHIPS + f"/{self.symbol}/navigate",
+            headers={"Authorization": f"Bearer {self.token}"},
+            json={"waypointSymbol": waypoint}  )
+    
+
+        if response.status_code != 200:
+            print("Something went wrong, orbit class ship")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+        
+        self._registration(response["data"])
+        
 
     
 
