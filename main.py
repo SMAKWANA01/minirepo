@@ -1,7 +1,4 @@
-
-import json
-import requests
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, session
 from my_classes import *
 import threading
 
@@ -33,20 +30,36 @@ def run_fulfill(contract, ship, task_id):
 
 
 app = Flask(__name__)
-agent = None
+
+#Secret key for sessions, make random later but this is fun for now
+app.secret_key = "superdupersecretkey that nobody will ever guess 676767 lmnopqrstuvwxyz" 
+
+
+# Tribute to the line that crashed my entire code: agent = None
 
 
 @app.route("/", methods = ["GET", "POST"])
 def index():
-
+    global agent
     if request.method == "POST":
         token = request.form.get("username")# This could be token or username.
         try:
-            global agent
+            session["token"] = token
+
             agent = Agent(token)
         except Exception as e:
             return render_template("error.html", error_code=e.args[0], error_message=e.args[1])
         return render_template("summary.html", agent=agent)
+    
+    #This is for whenever the user refreshes the page.
+    if "token" in session:
+
+        agent = Agent(session["token"])
+        return render_template("summary.html", agent=agent)
+    
+
+    return render_template("index.html")
+
         
     
     return render_template("index.html")

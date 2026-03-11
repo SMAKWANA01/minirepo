@@ -1,3 +1,7 @@
+#TODO: fuel. its running out. add fuel checks and refuel.
+
+
+
 import json
 import os
 import requests
@@ -17,7 +21,8 @@ TOKEN_FILE = "agents.json"
 
 #---------THE FOLLOWING TWO FUNCTIONS ARTE COPIED FROM SIR'S TEMPLATE---------#
 UTC_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
-DISPLAY_FORMAT = " %B, %Y"
+DISPLAY_FORMAT = " %B, %Y at %H:%M:%S"
+
 def parse_datetime(dt):
     return datetime.strptime(dt, UTC_FORMAT)
 
@@ -35,7 +40,6 @@ def format_datetime(dt_text):
 #------------------------CLASSES------------------------#
 class Contract():
     def __init__(self, contract_id, token):
-        
 
         self.token = token
         load = self._load_contract(contract_id)
@@ -52,114 +56,311 @@ class Contract():
         self.fulfilled = data["fulfilled"]
         self.deadlineToAccept = data["deadlineToAccept"]
 
-        #There may be many things to deliver, hence a list of dictionaries, 
-        #with "tradeSymbol", "destinationSymbol", "unitsRequired", "unitsFulfilled"
-        #The units part is integers
-
         self.deliver = data["terms"]["deliver"]
 
-        
+
+    # ---------------- INTERNAL LOAD ---------------- #
 
     def _load_contract(self, contract_id):
 
-        response = requests.get(MY_CONTRACTS +f"/{contract_id}", headers={"Authorization": f"Bearer {self.token}"})
-
+        response = requests.get(
+            MY_CONTRACTS + f"/{contract_id}",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
 
         if response.status_code not in [200, 201]:
             print("Something went wrong, Agent class load_contract")
-            print(response.text)# Only for debugging
+            print(response.text)
             raise Exception(response.status_code, response.reason)
+
         return response.json()
 
 
+    # ---------------- ACCEPT ---------------- #
+
     def accept(self):
-        response = requests.post(MY_CONTRACTS +f"/{self.id}/accept", headers={"Authorization": f"Bearer {self.token}"})
+        response = requests.post(
+            MY_CONTRACTS + f"/{self.id}/accept",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
         if response.status_code not in [200, 201]:
             print("Something went wrong, Agent class load_contract")
-            print(response.text)# Only for debugging
+            print(response.text)
             raise Exception(response.status_code, response.reason)
+
         self.accepted = True
         self.deadlineToAccept = None
-    
+
+
+    # ---------------- DELIVERY PROGRESS ---------------- #
+
+    def _delivered_so_far(self, symbol):
+        """Return how many units have already been delivered (server-side)."""
+        for d in self.deliver:
+            if d["tradeSymbol"] == symbol:
+                return d["unitsFulfilled"]
+        return 0
+
+
+    # ---------------- FULFILL (MAIN ORCHESTRATOR) ---------------- #
+
     def fulfill(self, ship):
-#TODO:  1) orbit from current possition
-#       2)  Find waypoint of the nearest asteroid, navigate there
-#       3) Looks like we have to survey otherwise itll take ages, if the survey gives deposit, use survey, otherwise mine whilst on cooldown
-#       Also, make sure to check all the available surveys and use the best one
-#       4)  Mine until we have enough resources
-#       5)  Fly to the destination
-#       6/7)  Deliver the resources, fulfill the contract
+
+        print("\n=== BEGINNING CONTRACT FULFILLMENT ===")
+
+        self._ensure_in_orbit(ship)
+
+        asteroid_fields = self._find_all_asteroid_fields(ship)
+        if not asteroid_fields:
+            raise Exception("No asteroid fields found in this system.")
+
+        print(f"Found {len(asteroid_fields)} asteroid fields.")
+
+        current_field_index = 0
+        self._navigate_to_waypoint(ship, asteroid_fields[current_field_index]["symbol"])
+
+        for item in self.deliver:
+            required_symbol = item["tradeSymbol"]
+            required_units = item["unitsRequired"]
+
+            print(f"\n=== STARTING DELIVERY FOR {required_symbol} ({required_units} units) ===")
+
+            self._mine_for_delivery(
+                ship,
+                required_symbol,
+                required_units,
+                asteroid_fields,
+                current_field_index
+            )
+
+        print("\n=== CONTRACT MINING COMPLETE — READY FOR FINAL DELIVERY ===")
+
+
+
+    # ---------------- NAVIGATION HELPERS ---------------- #
+
+    def _ensure_in_orbit(self, ship):
         if ship.status != "IN_ORBIT":
-            print("Going to orbit")
+            print("Going to orbit...")
             ship.orbit()
-        
-        waypoints = self.find_waypoints(ship)
-        
-        for _waypoint in waypoints:
-            if _waypoint["type"] in ["ENGINEERED_ASTEROID", "ASTEROID"]:
-                waypoint = _waypoint
+
+    def _navigate_to_waypoint(self, ship, waypoint_symbol):
+        if ship.waypoint == waypoint_symbol:
+            print(f"Already at waypoint {waypoint_symbol}.")
+            self._ensure_in_orbit(ship)
+            return
+
+        print(f"Navigating to waypoint: {waypoint_symbol}")
+        ship.navigate(waypoint_symbol)
+        self._wait_until_arrived(ship)
+        self._ensure_in_orbit(ship)
+
+    def _wait_until_arrived(self, ship):
+        print("Waiting for arrival...")
+
+        while True:
+            ship.deserialize()
+            status = ship.status
+
+            if status != "IN_TRANSIT":
                 break
+
+            print(f"Still in transit... {format_datetime(ship.route['arrival'])}")
+            sleep(2)
+
+        if ship.status != "IN_ORBIT":
+            print("Arrived — entering orbit...")
+            ship.orbit()
+
+        print("Arrival confirmed.")
+
+
+
+    # ---------------- ASTEROID DISCOVERY ---------------- #
+
+    def _find_all_asteroid_fields(self, ship):
+        waypoints = self.find_waypoints(ship)
+        return [
+            wp for wp in waypoints
+            if wp["type"] in ["ASTEROID", "ASTEROID_FIELD", "ENGINEERED_ASTEROID"]
+        ]
+
+
+    # ---------------- MINING LOOP ---------------- #
+
+    def _mine_for_delivery(self, ship, required_symbol, required_units, asteroid_fields, current_field_index):
+
+        active_survey = None
+        survey_expiry = None
+        no_progress = 0
+
+        delivered = self._delivered_so_far(required_symbol)
+
+        while delivered < required_units:
+
+            if ship.cargo_units >= ship.cargo_capacity:
+                print("\nCargo full — delivering what we have.")
+                self._handle_full_cargo(
+                    ship,
+                    required_symbol,
+                    asteroid_fields,
+                    current_field_index
+                )
+                delivered = self._delivered_so_far(required_symbol)
+                continue
+
+            self._wait_for_cooldown(ship)
+
+            if active_survey is None or datetime.now().timestamp() > survey_expiry:
+                active_survey, survey_expiry = self._get_best_survey(ship, required_symbol)
+
+            before = ship.count_cargo(required_symbol)
+            self._wait_for_cooldown(ship)
+            self._extract(ship, active_survey)
+            after = ship.count_cargo(required_symbol)
+
+            print(f"Current count of {required_symbol}: {after}/{required_units} (delivered: {delivered})")
+
+            if after == before:
+                no_progress += 1
+                print(f"No progress detected ({no_progress}/5)")
+            else:
+                no_progress = 0
+
+            if no_progress >= 5:
+                print("\nMining not yielding — moving to next asteroid field.")
+                current_field_index = self._move_to_next_asteroid(
+                    ship, asteroid_fields, current_field_index
+                )
+                active_survey = None
+                survey_expiry = None
+                no_progress = 0
+
+            delivered = self._delivered_so_far(required_symbol)
+
+
+
+    def _wait_for_cooldown(self, ship):
+        sleep(5)
+        while True:
+            ship.deserialize()
+            cooldown = ship.cooldown["remainingSeconds"]
+
+            if cooldown <= 0:
+                print("Cooldown reached zero — waiting for server sync...")
+                sleep(5)
+                ship.deserialize()
+                return
+
+            print(f"Waiting for cooldown: {cooldown}s")
+            sleep(cooldown + 1)
+
+
+
+    def _get_best_survey(self, ship, required_symbol):
+        print("\nCreating new survey...")
+        surveys = self.create_survey(ship.symbol)["surveys"]
+
+        best = None
+        best_count = 0
+
+        for s in surveys:
+            count = sum(1 for d in s["deposits"] if d["symbol"] == required_symbol)
+            if count > best_count:
+                best = s
+                best_count = count
+
+        if best is None:
+            print("No useful survey found — mining without survey.")
+            return None, None
+
+        print("Best survey deposits:", best["deposits"])
+        expiry = datetime.now().timestamp() + 15 * 60
+        return best, expiry
+
+
+
+    def _extract(self, ship, active_survey):
+        if active_survey:
+            print("Extracting with survey...")
+            ship.extract_with_survey(active_survey)
         else:
-            raise Exception("", "No valid waypoints were found, cannot continue")
-
-        if ship.waypoint != waypoint["symbol"]:
-            ship.navigate(waypoint["symbol"])
-
-        #sleep until we are there
-        while ship.status != "IN_ORBIT":
-            print("Navigating...")
-            sleep(5)
-            ship.registration()# update the status of the ship
+            print("Extracting without survey...")
+            ship.extract()
 
 
-        # SURVEY
-        # Loops through all deliveres
-        # Creates survey and if it's worth it, use it, otherwise just mine and hope for the best.
-        for i in range(len(self.deliver)):
-            required_symbol = self.deliver[0]["tradeSymbol"]
-            required_units = self.deliver[0]["unitsRequired"]
 
-            while ship.count_cargo(required_symbol) < required_units:
+    def _move_to_next_asteroid(self, ship, fields, index):
+        index = (index + 1) % len(fields)
+        next_wp = fields[index]
 
-                #sleep until both survey cooldown and extract cooldown over
-                print("Waiting for cooldowns...")
-                print("Cooldown remaining: ", ship.cooldown["remainingSeconds"])
-                sleep(ship.cooldown["remainingSeconds"] + 1)# Added +1 to be safe ;-;
-                ship.registration()# update the status of the ship
+        print(f"Switching to asteroid field: {next_wp['symbol']}")
+        self._navigate_to_waypoint(ship, next_wp["symbol"])
 
-                surveys = self.create_survey(ship.symbol)["surveys"]
-            
-                best_survey = None
-                count = 0
-                for survey in surveys:
-                    new_count = survey["deposits"].count({"symbol": required_symbol})
-                    if new_count > count:
-                        count = new_count
-                        best_survey = survey
-
-                if best_survey:
-                    print("Before extracting with survey, best survey deposits: ", best_survey["deposits"])
-                    print("Cooldown remaining: ", ship.cooldown["remainingSeconds"])
-                    sleep(ship.cooldown["remainingSeconds"] + 1)# Added +1 to be safe ;-;
-                    ship.registration()# update the status of the ship
-
-                    ship.extract_with_survey(best_survey)
-
-                else:
-                    print("No survey")
-                    print("Cooldown remaining: ", ship.cooldown["remainingSeconds"])
-                    sleep(ship.cooldown["remainingSeconds"] + 1)# Added +1 to be safe ;-;
-                    ship.registration()# update the status of the ship
-                    #TODO: ITS NOT EXTRACITNG! EVEN WITH COOLDOWN IT WANTS MORE COOLDOWN WHAT THE FLIP
-                    ship.extract()
-                print(f"Current count of {required_symbol}: {ship.count_cargo(required_symbol)}/{required_units}")
+        return index
 
 
-                
+
+    # ---------------- DELIVERY HANDLING ---------------- #
+
+    def _handle_full_cargo(self, ship, required_symbol, asteroid_fields, current_field_index):
+
+        for d in self.deliver:
+            if d["tradeSymbol"] == required_symbol:
+                destination = d["destinationSymbol"]
+                break
+
+        print(f"Delivering cargo to {destination}...")
+
+        self._navigate_to_waypoint(ship, destination)
+        self._wait_until_arrived(ship)
+
+        print("Docking for delivery...")
+        ship.dock()
+
+        self._deliver_resource(ship, required_symbol)
+
+        for item in ship.cargo_inventory:
+            if item["symbol"] != required_symbol:
+                print(f"Jettisoning {item['units']} of {item['symbol']}")
+                ship.jettison(item["symbol"], item["units"])
+
+        print("Undocking...")
+        ship.undock()
+
+        print("Returning to asteroid field...")
+        self._navigate_to_waypoint(ship, asteroid_fields[current_field_index]["symbol"])
+        self._ensure_in_orbit(ship)
 
 
-            
-    
+
+    def _deliver_resource(self, ship, symbol):
+        units = ship.count_cargo(symbol)
+
+        print(f"Delivering {units} units of {symbol}...")
+
+        response = requests.post(
+            MY_CONTRACTS + f"/{self.id}/deliver",
+            headers={"Authorization": f"Bearer {self.token}"},
+            json={
+                "shipSymbol": ship.symbol,
+                "tradeSymbol": symbol,
+                "units": units
+            }
+        )
+
+        if response.status_code not in [200, 201]:
+            print("Something went wrong delivering cargo")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+
+        ship.deserialize()
+        print("Delivery complete.")
+
+
+
+    # ---------------- API HELPERS ---------------- #
+
     def create_survey(self, ship_symbol):
         response = requests.post(
             MY_SHIPS + f"/{ship_symbol}/survey",
@@ -169,7 +370,7 @@ class Contract():
             print("Something went wrong, create survey class contract")
             print(response.text)
             raise Exception(response.status_code, response.reason)
-        
+
         return response.json()["data"]
 
     def find_waypoints(self, ship):
@@ -181,17 +382,19 @@ class Contract():
             print("Something went wrong, find waypoint class contract")
             print(response.text)
             raise Exception(response.status_code, response.reason)
-        
+
         return response.json()["data"]["waypoints"]
+
+
     
 
 class Ship:
     def __init__(self, ship_id, token):
         self.token = token
         self.ship_id = ship_id
-        self.registration()
+        self.deserialize()
 
-    def registration(self):
+    def deserialize(self):
         
         load = self._load_ship(self.ship_id)
         data = load["data"]
@@ -254,7 +457,7 @@ class Ship:
             print(response.text)
             raise Exception(response.status_code, response.reason)
         
-        self.registration()
+        self.deserialize()
     
     def navigate(self, waypoint):
         response = requests.post(
@@ -267,21 +470,29 @@ class Ship:
             print("Something went wrong, navigate class ship")
             print(response.text)
             raise Exception(response.status_code, response.reason)
-        
-        self.registration(response["data"])
+    
+        print("Navigating...", end="")
+        # Loop until we arrive
+        while self.status == "IN_TRANSIT":
+            print(".", end="")
+            sleep(1)
+            self.deserialize()  # refresh status from GET
+        print("\nArrived!")
         
     def extract_with_survey(self, survey):
         response = requests.post(
             MY_SHIPS + f"/{self.symbol}/extract/survey",
             headers={"Authorization": f"Bearer {self.token}"},
-            json=json.dumps(survey)
+            json=survey
         )
         if response.status_code != 201: 
             print("Something went wrong, extract with survey, class ship")
             print(response.text)
             raise Exception(response.status_code, response.reason)
         
-        self.registration(response["data"])
+        sleep(5)  # Sleep a bit to allow the server to update the ship's cargo and cooldown
+
+        self.deserialize()
 
     def count_cargo(self, trade_symbol):
         for item in self.cargo_inventory:
@@ -300,9 +511,50 @@ class Ship:
             print(response.text)
             raise Exception(response.status_code, response.reason)
         
-        self.registration(response["data"])
+        sleep(5)  # Sleep a bit to allow the server to update the ship's cargo and cooldown
+        
+        self.deserialize()
 
-    
+    def dock(self):
+        response = requests.post(
+            MY_SHIPS + f"/{self.symbol}/dock",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        if response.status_code not in [200, 201]:
+            print("Something went wrong docking")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+        self.deserialize()
+
+    def undock(self):
+        response = requests.post(
+            MY_SHIPS + f"/{self.symbol}/orbit",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        if response.status_code not in [200, 201]:
+            print("Something went wrong undocking")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+        self.deserialize()
+    def jettison(self, trade_symbol, units):
+        response = requests.post(
+            MY_SHIPS + f"/{self.symbol}/jettison",
+            headers={"Authorization": f"Bearer {self.token}"},
+            json={
+                "symbol": trade_symbol,
+                "units": units
+            }
+        )
+
+        if response.status_code not in [200, 201]:
+            print("Something went wrong jettisoning cargo")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+
+        print(f"Jettisoned {units} units of {trade_symbol}.")
+        self.deserialize()
+
+        
 
 
 class Agent:
