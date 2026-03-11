@@ -65,7 +65,7 @@ class Contract():
         response = requests.get(MY_CONTRACTS +f"/{contract_id}", headers={"Authorization": f"Bearer {self.token}"})
 
 
-        if response.status_code != 200:
+        if response.status_code not in [200, 201]:
             print("Something went wrong, Agent class load_contract")
             print(response.text)# Only for debugging
             raise Exception(response.status_code, response.reason)
@@ -74,7 +74,7 @@ class Contract():
 
     def accept(self):
         response = requests.post(MY_CONTRACTS +f"/{self.id}/accept", headers={"Authorization": f"Bearer {self.token}"})
-        if response.status_code != 200:
+        if response.status_code not in [200, 201]:
             print("Something went wrong, Agent class load_contract")
             print(response.text)# Only for debugging
             raise Exception(response.status_code, response.reason)
@@ -93,7 +93,7 @@ class Contract():
             print("Going to orbit")
             ship.orbit()
         
-        waypoints = self.find_waypoints(ship.symbol)
+        waypoints = self.find_waypoints(ship)
         
         for _waypoint in waypoints:
             if _waypoint["type"] in ["ENGINEERED_ASTEROID", "ASTEROID"]:
@@ -102,12 +102,14 @@ class Contract():
         else:
             raise Exception("", "No valid waypoints were found, cannot continue")
 
-        ship.navigate(waypoint)
+        if ship.waypoint != waypoint["symbol"]:
+            ship.navigate(waypoint["symbol"])
+
         #sleep until we are there
         while ship.status != "IN_ORBIT":
             print("Navigating...")
             sleep(5)
-            ship._registration()# update the status of the ship
+            ship.registration()# update the status of the ship
 
 
         # SURVEY
@@ -118,8 +120,15 @@ class Contract():
             required_units = self.deliver[0]["unitsRequired"]
 
             while ship.count_cargo(required_symbol) < required_units:
-                surveys = self.create_survey(ship.symbol)["surveys"]
 
+                #sleep until both survey cooldown and extract cooldown over
+                print("Waiting for cooldowns...")
+                print("Cooldown remaining: ", ship.cooldown["remainingSeconds"])
+                sleep(ship.cooldown["remainingSeconds"] + 1)# Added +1 to be safe ;-;
+                ship.registration()# update the status of the ship
+
+                surveys = self.create_survey(ship.symbol)["surveys"]
+            
                 best_survey = None
                 count = 0
                 for survey in surveys:
@@ -129,54 +138,60 @@ class Contract():
                         best_survey = survey
 
                 if best_survey:
-                    print("Using survey")
+                    print("Before extracting with survey, best survey deposits: ", best_survey["deposits"])
+                    print("Cooldown remaining: ", ship.cooldown["remainingSeconds"])
+                    sleep(ship.cooldown["remainingSeconds"] + 1)# Added +1 to be safe ;-;
+                    ship.registration()# update the status of the ship
+
                     ship.extract_with_survey(best_survey)
 
                 else:
                     print("No survey")
+                    print("Cooldown remaining: ", ship.cooldown["remainingSeconds"])
+                    sleep(ship.cooldown["remainingSeconds"] + 1)# Added +1 to be safe ;-;
+                    ship.registration()# update the status of the ship
+                    #TODO: ITS NOT EXTRACITNG! EVEN WITH COOLDOWN IT WANTS MORE COOLDOWN WHAT THE FLIP
                     ship.extract()
                 print(f"Current count of {required_symbol}: {ship.count_cargo(required_symbol)}/{required_units}")
 
-                #sleep until both survey cooldown and extract cooldown over
-                sleep(ship.cooldown["remainingSeconds"] + 1)# Added +1 to be safe ;-;
-                ship._registration()# update the status of the ship
+
                 
 
 
             
     
     def create_survey(self, ship_symbol):
-        response = requests.get(
+        response = requests.post(
             MY_SHIPS + f"/{ship_symbol}/survey",
             headers={"Authorization": f"Bearer {self.token}"}
         )
-        if response.status_code != 200:
-            print("Something went wrong, orbit class ship")
+        if response.status_code != 201:
+            print("Something went wrong, create survey class contract")
             print(response.text)
             raise Exception(response.status_code, response.reason)
         
-        return response
+        return response.json()["data"]
 
-    def find_waypoints(self, ship_symbol):
+    def find_waypoints(self, ship):
         response = requests.get(
-            SYSTEMS + f"/{ship_symbol}",
+            SYSTEMS + f"/{ship.system}",
             headers={"Authorization": f"Bearer {self.token}"}
         )
-        if response.status_code != 200:
-            print("Something went wrong, orbit class ship")
+        if response.status_code not in [200, 201]:
+            print("Something went wrong, find waypoint class contract")
             print(response.text)
             raise Exception(response.status_code, response.reason)
         
-        return response["waypoints"]
+        return response.json()["data"]["waypoints"]
     
 
 class Ship:
     def __init__(self, ship_id, token):
         self.token = token
         self.ship_id = ship_id
-        self._registration()
+        self.registration()
 
-    def _registration(self):
+    def registration(self):
         
         load = self._load_ship(self.ship_id)
         data = load["data"]
@@ -222,7 +237,7 @@ class Ship:
             headers={"Authorization": f"Bearer {self.token}"}
         )
 
-        if response.status_code != 200:
+        if response.status_code not in [200, 201]:
             print("Something went wrong, Agent class load_ship")
             print(response.text)
             raise Exception(response.status_code, response.reason)
@@ -234,12 +249,12 @@ class Ship:
             MY_SHIPS + f"/{self.symbol}/orbit",
             headers={"Authorization": f"Bearer {self.token}"}
         )
-        if response.status_code != 200:
+        if response.status_code not in [200, 201]:
             print("Something went wrong, orbit class ship")
             print(response.text)
             raise Exception(response.status_code, response.reason)
         
-        self._registration()
+        self.registration()
     
     def navigate(self, waypoint):
         response = requests.post(
@@ -248,25 +263,25 @@ class Ship:
             json={"waypointSymbol": waypoint}  )
     
 
-        if response.status_code != 200:
-            print("Something went wrong, orbit class ship")
+        if response.status_code not in [200, 201]:
+            print("Something went wrong, navigate class ship")
             print(response.text)
             raise Exception(response.status_code, response.reason)
         
-        self._registration(response["data"])
+        self.registration(response["data"])
         
     def extract_with_survey(self, survey):
         response = requests.post(
-            MY_SHIPS + f"/{self.symbol}/extract/symbol",
+            MY_SHIPS + f"/{self.symbol}/extract/survey",
             headers={"Authorization": f"Bearer {self.token}"},
-            json={survey}
+            json=json.dumps(survey)
         )
-        if response.status_code != 200:
+        if response.status_code != 201: 
             print("Something went wrong, extract with survey, class ship")
             print(response.text)
             raise Exception(response.status_code, response.reason)
         
-        self._registration(response["data"])
+        self.registration(response["data"])
 
     def count_cargo(self, trade_symbol):
         for item in self.cargo_inventory:
@@ -280,12 +295,12 @@ class Ship:
             MY_SHIPS + f"/{self.symbol}/extract",
             headers={"Authorization": f"Bearer {self.token}"}
         )
-        if response.status_code != 200:
+        if response.status_code not in [200, 201]:
             print("Something went wrong, extract, class ship")
             print(response.text)
             raise Exception(response.status_code, response.reason)
         
-        self._registration(response["data"])
+        self.registration(response["data"])
 
     
 
@@ -342,7 +357,7 @@ class Agent:
     def _get_agent_data(self):
         response = requests.get(MY_ACCOUNT, headers=self._headers())
 
-        if response.status_code != 200:
+        if response.status_code not in [200, 201]:
             print("Something went wrong, Agent class get_agent_data")
             print(response.text)# Only for debugging 
             raise Exception(response.status_code, response.reason + " maybe token has expired?")
@@ -351,16 +366,16 @@ class Agent:
 
         response = requests.get(MY_CONTRACTS, headers=self._headers())
 
-        if response.status_code != 200:
+        if response.status_code not in [200, 201]:
             print("Something went wrong, Agent class get_agent_data, contracts")
             raise Exception(response.status_code, response.reason)
         
         data2 = response.json()["data"]
 
         response = requests.get(MY_SHIPS, headers=self._headers())
-        if response.status_code != 200:
+        if response.status_code not in [200, 201]:
             print("Something went wrong, Agent class get_agent_data, ships")
-            raise Exception(response.status_code, response.reason)
+            raise Exception(response.status_code, response.reason) 
         
         data3 = response.json()["data"]
 

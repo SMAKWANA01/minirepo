@@ -1,3 +1,4 @@
+
 import json
 import requests
 from flask import Flask, render_template, request
@@ -26,6 +27,7 @@ def run_fulfill(contract, ship, task_id):
         contract.fulfill(ship)
         background_tasks[task_id] = "done"
     except Exception as e:
+        print("exception", e)
         background_tasks[task_id] = f"error: {e}"
         return render_template("error.html", error_code=e.args[0], error_message=e.args[1])
 
@@ -52,6 +54,7 @@ def index():
 @app.route("/contracts/<contract_id>/fulfill")# METHOD SHOULD BE POST
 def fulfill_contract(contract_id):
     contract = next(c for c in agent.contracts if c.id == contract_id)
+    print("fullfilling contract:", contract.id)
     ship = agent.ships[0]  # For simplicity, using the first ship, would make it specific to contract but we have time restraint
 
     task_id = f"{contract_id}_fulfill"
@@ -79,7 +82,7 @@ def summary():
 @app.route("/contracts/<contract_id>", methods=["POST"])
 def accept_contract(contract_id):
     for contract in agent.contracts:
-        print(contract)
+        print("contract=",contract)
         if contract.id == contract_id:
             try:
                 contract.accept()
