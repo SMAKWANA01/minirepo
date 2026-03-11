@@ -2,6 +2,7 @@ import json
 import os
 import requests
 from datetime import datetime
+from time import sleep
 
 #------------------------CONSTANTS------------------------#
 API_STATUS = "https://api.spacetraders.io/v2/"
@@ -102,6 +103,12 @@ class Contract():
             raise Exception("", "No valid waypoints were found, cannot continue")
 
         ship.navigate(waypoint)
+        #sleep until we are there
+        while ship.status != "IN_ORBIT":
+            print("Navigating...")
+            sleep(5)
+            ship._registration()# update the status of the ship
+
 
         # SURVEY
         # Loops through all deliveres
@@ -124,10 +131,16 @@ class Contract():
                 if best_survey:
                     print("Using survey")
                     ship.extract_with_survey(best_survey)
+
                 else:
                     print("No survey")
                     ship.extract()
                 print(f"Current count of {required_symbol}: {ship.count_cargo(required_symbol)}/{required_units}")
+
+                #sleep until both survey cooldown and extract cooldown over
+                sleep(ship.cooldown["remainingSeconds"] + 1)# Added +1 to be safe ;-;
+                ship._registration()# update the status of the ship
+                
 
 
             
