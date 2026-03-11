@@ -103,14 +103,33 @@ class Contract():
 
         ship.navigate(waypoint)
 
-
-
-
         # SURVEY
-        surveys = self.create_survey(ship.symbol)["surveys"]
-        for survey in surveys:
-            pass
-        #TODO: FIND WHICH SURVEY HAS THE HIGHEST YIELD. 
+        # Loops through all deliveres
+        # Creates survey and if it's worth it, use it, otherwise just mine and hope for the best.
+        for i in range(len(self.deliver)):
+            required_symbol = self.deliver[0]["tradeSymbol"]
+            required_units = self.deliver[0]["unitsRequired"]
+
+            while ship.count_cargo(required_symbol) < required_units:
+                surveys = self.create_survey(ship.symbol)["surveys"]
+
+                best_survey = None
+                count = 0
+                for survey in surveys:
+                    new_count = survey["deposits"].count({"symbol": required_symbol})
+                    if new_count > count:
+                        count = new_count
+                        best_survey = survey
+
+                if best_survey:
+                    print("Using survey")
+                    ship.extract_with_survey(best_survey)
+                else:
+                    print("No survey")
+                    ship.extract()
+                print(f"Current count of {required_symbol}: {ship.count_cargo(required_symbol)}/{required_units}")
+
+
             
     
     def create_survey(self, ship_symbol):
@@ -223,6 +242,37 @@ class Ship:
         
         self._registration(response["data"])
         
+    def extract_with_survey(self, survey):
+        response = requests.post(
+            MY_SHIPS + f"/{self.symbol}/extract/symbol",
+            headers={"Authorization": f"Bearer {self.token}"},
+            json={survey}
+        )
+        if response.status_code != 200:
+            print("Something went wrong, extract with survey, class ship")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+        
+        self._registration(response["data"])
+
+    def count_cargo(self, trade_symbol):
+        for item in self.cargo_inventory:
+            if item["symbol"] == trade_symbol:
+                return item["units"]
+        return 0
+
+
+    def extract(self):
+        response = requests.post(
+            MY_SHIPS + f"/{self.symbol}/extract",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        if response.status_code != 200:
+            print("Something went wrong, extract, class ship")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+        
+        self._registration(response["data"])
 
     
 
