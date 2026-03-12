@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contracts</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+
+
+    <div id="agent_info">
+        <h1>Agent {{ agent.symbol }}</h1>
+
+        <div class="row">
+            <h2>Faction:</h2>
+            <p>{{ agent.faction }}</p>
+        </div>
+
+        <div class="row">
+            <h2>Credits:</h2>
+            <p>{{ agent.credits }}</p>
+        </div>
+    </div>
+
+
+    <div class="info">
+
+        {% for contract in agent.contracts %}
+        <div class="contract">
+
+            <h3 style="text-align: center;">CONTRACT: {{ contract.id }}</h3>
+
+            <p><strong>Type:</strong> {{ contract.type }}</p>
+            <p><strong>Faction:</strong> {{ contract.faction }}</p>
+            <p><strong>Deadline:</strong> {{ contract.deadline }}</p>
+
+
+            <h4>Payment</h4>
+            <ul>
+                <li><strong>On Accept:</strong> {{ contract.paymet_onAccepted }}</li>
+                <li><strong>On Fulfilled:</strong> {{ contract.paymet_onFulfilled }}</li>
+            </ul>
+
+
+            <h4>Deliveries</h4>
+            {% for d in contract.deliver %}
+                <p><strong>{{ d.tradeSymbol }}</strong></p>
+                <ul>
+                    <li><strong>Destination:</strong> {{ d.destinationSymbol }}</li>
+                    <li><strong>Required:</strong> {{ d.unitsRequired }}</li>
+                    <li><strong>Fulfilled:</strong> {{ d.unitsFulfilled }}</li>
+                    <li><strong>Remaining:</strong> {{ d.unitsRequired - d.unitsFulfilled }}</li>
+                </ul>
+            {% endfor %}
+
+
+            <h4>Status</h4>
+            {% if contract.fulfilled %}
+                <p>Fulfilled</p>
+            {% elif contract.accepted %}
+                <p>Accepted</p>
+            {% else %}
+                <p>Not Accepted</p>
+                <form action="/contracts/{{ contract.id }}/accept" method="POST">
+                    <button type="submit" style="width: 100%;">Accept Contract</button>
+                </form>
+            {% endif %}
+
+            {% if contract.accepted and not contract.fulfilled %}
+                <a href="{{ url_for('fulfill_contract', contract_id=contract.id) }}">
+                    <button style="width: 100%; margin-top: 10px;">Start Fulfillment</button>
+                </a>
+            {% endif %}
+
+        </div>
+        {% endfor %}
+
+    </div>
+
+    <br>
+    <a href="{{ url_for('summary') }}">Back to Summary</a>
+
+</body>
+</html>

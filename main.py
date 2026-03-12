@@ -103,5 +103,73 @@ def accept_contract(contract_id):
                 return render_template("error.html", error_code=e.args[0], error_message=e.args[1])
     return render_template("summary.html", agent=agent)
 
+@app.route("/ships/<ship_symbol>")
+def ship_details(ship_symbol):
+    global agent
+    ship = next((s for s in agent.ships if s.symbol == ship_symbol), None)
+    if not ship:
+        return render_template("error.html", error_code=404, error_message=f"Ship {ship_symbol} not found")
+
+    # Refresh ship 
+    ship.deserialize()
+
+    return render_template("ship.html", ship=ship, agent=agent)
+
+@app.route("/contracts")
+def contracts_page():
+    return render_template("contracts.html", agent=agent)
+
+@app.route("/ships/<ship_symbol>/control", methods=["GET", "POST"])
+def ship_control(ship_symbol):
+    global agent
+
+    ship = next((s for s in agent.ships if s.symbol == ship_symbol), None)
+    if not ship:
+        return render_template("error.html", error_code=404, error_message="Ship not found")
+
+    ship.deserialize()
+
+    # Load waypoints for dropdown
+    contract = agent.contracts[0]  # any contract works, just need wp hehehe
+    waypoints = contract.find_waypoints(ship)
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        try:
+            if action == "orbit":
+                ship.orbit()
+
+            elif action == "dock":
+                ship.dock()
+
+            elif action == "undock":
+                ship.undock()
+
+            elif action == "refuel":
+                ship.refuel()
+
+            elif action == "navigate":
+                wp = request.form.get("waypoint")
+                ship.navigate(wp)
+
+            elif action == "jettison":
+                symbol = request.form.get("cargo_symbol")
+                units = int(request.form.get("cargo_units"))
+                ship.jettison(symbol, units)
+
+            elif action == "flight_mode":
+                mode = request.form.get("mode")
+                ship.set_flight_mode(mode)
+
+        except Exception as e:
+            return render_template("ship_control.html", ship=ship, agent=agent, waypoints=waypoints, error=str(e))
+
+        ship.deserialize()
+
+    return render_template("ship_control.html", ship=ship, agent=agent, waypoints=waypoints)
+
+
+
 if __name__ == "__main__":
     app.run(debug=True)

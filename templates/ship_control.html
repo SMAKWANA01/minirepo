@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Control {{ ship.symbol }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+
+
+    <div id="agent_info">
+        <h1>Agent {{ agent.symbol }}</h1>
+        <div class="row"><h2>Faction:</h2><p>{{ agent.faction }}</p></div>
+        <div class="row"><h2>Credits:</h2><p>{{ agent.credits }}</p></div>
+    </div>
+
+    {% if error %}
+        <p style="color:red; font-weight:bold;">Error: {{ error }}</p>
+    {% endif %}
+
+    <div class="info">
+
+        <div class="ship">
+            <h3 style="text-align:center;">Movement</h3>
+            <form method="POST">
+                <button name="action" value="orbit" style="width:100%;">Orbit</button>
+                <button name="action" value="dock" style="width:100%;">Dock</button>
+                <button name="action" value="undock" style="width:100%;">Undock</button>
+            </form>
+        </div>
+
+
+        <div class="ship">
+            <h3 style="text-align:center;">Navigate</h3>
+            <form method="POST">
+                <select name="waypoint" style="width:100%;">
+                    {% for wp in waypoints %}
+                        <option value="{{ wp.symbol }}">{{ wp.symbol }} ({{ wp.type }})</option>
+                    {% endfor %}
+                </select>
+                <button name="action" value="navigate" style="width:100%; margin-top:10px;">Go</button>
+            </form>
+        </div>
+
+        <div class="ship">
+            <h3 style="text-align:center;">Fuel</h3>
+            <p>Current: {{ ship.fuel_current }} / {{ ship.fuel_capacity }}</p>
+            <form method="POST">
+                <button name="action" value="refuel" style="width:100%;">Refuel</button>
+            </form>
+        </div>
+
+        <div class="ship">
+            <h3 style="text-align:center;">Jettison Cargo</h3>
+            <form method="POST">
+                <select name="cargo_symbol" style="width:100%;">
+                    {% for item in ship.cargo_inventory %}
+                        <option value="{{ item.symbol }}">{{ item.symbol }} ({{ item.units }})</option>
+                    {% endfor %}
+                </select>
+
+                <input type="number" name="cargo_units" min="1" placeholder="Units" style="width:100%; margin-top:10px;">
+
+                <button name="action" value="jettison" style="width:100%; margin-top:10px;">Jettison</button>
+            </form>
+        </div>
+
+     
+        <div class="ship">
+            <h3 style="text-align:center;">Flight Mode</h3>
+            <form method="POST">
+                <select name="mode" style="width:100%;">
+                    <option value="CRUISE">CRUISE</option>
+                    <option value="BURN">BURN</option>
+                    <option value="DRIFT">DRIFT</option>
+                    <option value="STEALTH">STEALTH</option>
+                </select>
+                <button name="action" value="flight_mode" style="width:100%; margin-top:10px;">Set Mode</button>
+            </form>
+        </div>
+
+    </div>
+
+    <br>
+    <a href="{{ url_for('ship_details', ship_symbol=ship.symbol) }}">Back to Ship</a>
+
+</body>
+</html>

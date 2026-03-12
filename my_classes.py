@@ -1,5 +1,5 @@
 #TODO: fuel. its running out. add fuel checks and refuel.
-
+#TODO: Make sure everything works with the new control page
 
 
 import json
@@ -59,7 +59,7 @@ class Contract():
         self.deliver = data["terms"]["deliver"]
 
 
-    # ---------------- INTERNAL LOAD ---------------- #
+
 
     def _load_contract(self, contract_id):
 
@@ -76,7 +76,6 @@ class Contract():
         return response.json()
 
 
-    # ---------------- ACCEPT ---------------- #
 
     def accept(self):
         response = requests.post(
@@ -92,7 +91,6 @@ class Contract():
         self.deadlineToAccept = None
 
 
-    # ---------------- DELIVERY PROGRESS ---------------- #
 
     def _delivered_so_far(self, symbol):
         """Return how many units have already been delivered (server-side)."""
@@ -102,11 +100,11 @@ class Contract():
         return 0
 
 
-    # ---------------- FULFILL (MAIN ORCHESTRATOR) ---------------- #
+    #This is where the magic happens :D
 
     def fulfill(self, ship):
 
-        print("\n=== BEGINNING CONTRACT FULFILLMENT ===")
+        print("\n BEGINNING CONTRACT FULFILLMENT \n")
 
         self._ensure_in_orbit(ship)
 
@@ -123,7 +121,7 @@ class Contract():
             required_symbol = item["tradeSymbol"]
             required_units = item["unitsRequired"]
 
-            print(f"\n=== STARTING DELIVERY FOR {required_symbol} ({required_units} units) ===")
+            print(f"\n STARTING DELIVERY FOR {required_symbol} ({required_units} units) \n")
 
             self._mine_for_delivery(
                 ship,
@@ -133,36 +131,105 @@ class Contract():
                 current_field_index
             )
 
-        print("\n=== CONTRACT MINING COMPLETE — READY FOR FINAL DELIVERY ===")
+        print("\n CONTRACT MINING COMPLETE — READY FOR FINAL DELIVERY \n")
 
 
 
-    # ---------------- NAVIGATION HELPERS ---------------- #
+    # helper functions for navigation and mining
 
     def _ensure_in_orbit(self, ship):
+        ship.deserialize()
+
+        if ship.status == "IN_TRANSIT":
+            print("Ship is in transit — waiting for arrival instead of orbiting.")
+            self._wait_until_arrived(ship)
+            return
+
         if ship.status != "IN_ORBIT":
             print("Going to orbit...")
             ship.orbit()
 
+
     def _navigate_to_waypoint(self, ship, waypoint_symbol):
+
         if ship.waypoint == waypoint_symbol:
-            print(f"Already at waypoint {waypoint_symbol}.")
-            self._ensure_in_orbit(ship)
+            print(f"[NAV] Already at {waypoint_symbol}, skipping navigation.")
             return
+        print(f"[NAV DEBUG] From {ship.waypoint} to {waypoint_symbol}, fuel={ship.fuel_current}/{ship.fuel_capacity}")
+
+        
+        if waypoint_symbol == self._find_nearest_fuel_station(ship)["symbol"]:
+            print("[NAV] Skipping fuel check because we are already heading to a fuel station.")
+        else:
+            if ship.is_low_fuel():
+                print("[NAV] Fuel low before navigation — refueling first.")
+                self._auto_refuel(ship)
 
         print(f"Navigating to waypoint: {waypoint_symbol}")
-        ship.navigate(waypoint_symbol)
+
+        try:
+            # First attempt: normal navigation
+            response = requests.post(
+                MY_SHIPS + f"/{ship.symbol}/navigate",
+                headers={"Authorization": f"Bearer {self.token}"},
+                json={"waypointSymbol": waypoint_symbol}
+            )
+
+            if response.status_code not in [200, 201]:
+                raise Exception(response.status_code, response.text)
+
+        except Exception as e:
+
+            msg = str(e)
+            if "fuelRequired" in msg or "4203" in msg:
+                print("[NAV-EMERGENCY] Not enough fuel — switching to DRIFT mode.")
+                ship.set_flight_mode("DRIFT")
+
+                # Retry navigation in DRIFT mode (always succeeds)
+                response = requests.post(
+                    MY_SHIPS + f"/{ship.symbol}/navigate",
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    json={"waypointSymbol": waypoint_symbol}
+                )
+
+                if response.status_code not in [200, 201]:
+                    print("[NAV-EMERGENCY] DRIFT navigation failed unexpectedly.")
+                    print(response.text)
+                    raise Exception(response.status_code, response.reason)
+
+                print("[NAV-EMERGENCY] DRIFT navigation succeeded.")
+
+
+            else:
+                # Not a fuel error
+                raise
+        
+        arrival = ship.route["arrival"]
+        print(f"[NAV-EMERGENCY] DRIFT navigation succeeded.")
+        print(f"[NAV-EMERGENCY] Arrival ETA: {format_datetime(arrival)}")
+        # Continue as normal
         self._wait_until_arrived(ship)
+        ship.set_flight_mode("CRUISE")
         self._ensure_in_orbit(ship)
+
+
 
     def _wait_until_arrived(self, ship):
         print("Waiting for arrival...")
 
         while True:
             ship.deserialize()
-            status = ship.status
 
-            if status != "IN_TRANSIT":
+            # If server says we're not in transi t, we're done
+            if ship.status != "IN_TRANSIT":
+                break
+
+            # If arrival time is in the past, force one more refresh and break
+            arrival_dt = parse_datetime(ship.route["arrival"])
+            if arrival_dt.timestamp() <= datetime.now().timestamp():
+                print("Arrival time passed — forcing final sync...")
+                sleep(2)
+                ship.deserialize()
                 break
 
             print(f"Still in transit... {format_datetime(ship.route['arrival'])}")
@@ -176,7 +243,8 @@ class Contract():
 
 
 
-    # ---------------- ASTEROID DISCOVERY ---------------- #
+
+
 
     def _find_all_asteroid_fields(self, ship):
         waypoints = self.find_waypoints(ship)
@@ -186,7 +254,6 @@ class Contract():
         ]
 
 
-    # ---------------- MINING LOOP ---------------- #
 
     def _mine_for_delivery(self, ship, required_symbol, required_units, asteroid_fields, current_field_index):
 
@@ -197,9 +264,13 @@ class Contract():
         delivered = self._delivered_so_far(required_symbol)
 
         while delivered < required_units:
-
+            #Check fuel, if low refuel:
+            if ship.is_low_fuel():
+                print("Fuel low — initiating auto-refuel sequence.")
+                self._auto_refuel(ship)
+            
             if ship.cargo_units >= ship.cargo_capacity:
-                print("\nCargo full — delivering what we have.")
+                print("Cargo full — delivering what we have.")
                 self._handle_full_cargo(
                     ship,
                     required_symbol,
@@ -228,7 +299,7 @@ class Contract():
                 no_progress = 0
 
             if no_progress >= 5:
-                print("\nMining not yielding — moving to next asteroid field.")
+                print("\nMining not giving anything — moving to next asteroid field.")
                 current_field_index = self._move_to_next_asteroid(
                     ship, asteroid_fields, current_field_index
                 )
@@ -301,8 +372,6 @@ class Contract():
 
 
 
-    # ---------------- DELIVERY HANDLING ---------------- #
-
     def _handle_full_cargo(self, ship, required_symbol, asteroid_fields, current_field_index):
 
         for d in self.deliver:
@@ -359,7 +428,7 @@ class Contract():
 
 
 
-    # ---------------- API HELPERS ---------------- #
+    # API helpers
 
     def create_survey(self, ship_symbol):
         response = requests.post(
@@ -385,8 +454,50 @@ class Contract():
 
         return response.json()["data"]["waypoints"]
 
+    def _find_nearest_fuel_station(self, ship):
+        waypoints = self.find_waypoints(ship)
 
-    
+        fuel_stations = [
+            wp for wp in waypoints
+            if wp["type"] == "FUEL_STATION"
+        ]
+
+        if fuel_stations:
+            return fuel_stations[0]
+        raise Exception("", "No fuel stations found in this system.")
+
+    def _auto_refuel(self, ship):
+        print(f"[AUTO-REFUEL] Triggered at waypoint {ship.waypoint}, fuel={ship.fuel_current}")
+
+        station = self._find_nearest_fuel_station(ship)
+        print(f"Nearest fuel station: {station['symbol']}")
+
+        return_point = ship.waypoint
+
+        self._navigate_to_waypoint(ship, station["symbol"])
+
+        print("Docking for refuel...")
+        ship.dock()
+
+        try:
+            ship.refuel()
+        except:
+            print("Refuel failed ")
+            ship.undock()
+            raise Exception("", "Refuel failed at station " + station["symbol"])
+        
+        print(f"[AUTO-REFUEL] After refuel: fuel={ship.fuel_current}")
+
+        print("Undocking...")
+        ship.undock()
+
+        # Return to asteroid 
+        print(f"Returning to {return_point}...")
+        self._navigate_to_waypoint(ship, return_point)
+        print(f"[AUTO-REFUEL] Arrived back at {ship.waypoint}, fuel={ship.fuel_current}")
+        print("Rufuel Completed\n")
+
+        
 
 class Ship:
     def __init__(self, ship_id, token):
@@ -553,6 +664,40 @@ class Ship:
 
         print(f"Jettisoned {units} units of {trade_symbol}.")
         self.deserialize()
+    
+
+    #Experience tells me 250 is enough, its only a mini NEA so not that deep
+    def is_low_fuel(self, threshold=250):
+        print(f"[FUEL CHECK] Current: {self.fuel_current}, Capacity: {self.fuel_capacity}, Threshold: {threshold}")
+        return self.fuel_current < threshold
+
+
+    def refuel(self):
+        response = requests.post(
+            MY_SHIPS + f"/{self.symbol}/refuel",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        if response.status_code not in [200, 201]:
+            print("Refuel failed")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+
+        print("Refueled successfully.")
+        self.deserialize()
+
+    def set_flight_mode(self, mode):
+        response = requests.patch(
+            MY_SHIPS + f"/{self.symbol}/nav",
+            headers={"Authorization": f"Bearer {self.token}"},
+            json={"flightMode": mode}
+        )
+        if response.status_code not in [200, 201]:
+            print("Something went wrong setting flight mode")
+            print(response.text)
+            raise Exception(response.status_code, response.reason)
+        self.deserialize()
+        print(f"[NAV] Flight mode set to {self.flight_mode}")
+
 
         
 
@@ -606,6 +751,7 @@ class Agent:
         return {"Authorization": f"Bearer {self.token}"}
 
     #NOT internal function, I'll call this once in main.
+    #nvm it is an internal function, it gets called in the constructor to load all the data about the agent, ships and contracts.
     def _get_agent_data(self):
         response = requests.get(MY_ACCOUNT, headers=self._headers())
 

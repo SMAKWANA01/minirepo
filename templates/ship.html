@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ship {{ ship.symbol }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+
+    <div id="agent_info">
+        <h1>Agent {{ agent.symbol }}</h1>
+
+        <div class="row">
+            <h2>Faction:</h2>
+            <p>{{ agent.faction }}</p>
+        </div>
+
+        <div class="row">
+            <h2>Credits:</h2>
+            <p>{{ agent.credits }}</p>
+        </div>
+    </div>
+
+    <div class="info">
+
+        <div class="ship">
+            <h3 style="text-align: center;">BASIC INFO</h3>
+            <p><strong>Symbol:</strong> {{ ship.symbol }}</p>
+            <p><strong>Role:</strong> {{ ship.registration.role }}</p>
+            <p><strong>Faction:</strong> {{ ship.registration.factionSymbol }}</p>
+        </div>
+
+        <div class="ship">
+            <h3 style="text-align: center;">NAVIGATION</h3>
+            <p><strong>System:</strong> {{ ship.system }}</p>
+            <p><strong>Waypoint:</strong> {{ ship.waypoint }}</p>
+            <p><strong>Status:</strong> {{ ship.status }}</p>
+            <p><strong>Flight Mode:</strong> {{ ship.flight_mode }}</p>
+            <p><strong>Route:</strong></p>
+            <ul>
+                <li><strong>Departure:</strong> {{ ship.route.departureSymbol }}</li>
+                <li><strong>Destination:</strong> {{ ship.route.destinationSymbol }}</li>
+                <li><strong>Arrival:</strong> {{ ship.route.arrival }}</li>
+            </ul>
+        </div>
+
+
+        <div class="ship">
+            <h3 style="text-align: center;">FUEL</h3>
+            <p><strong>Current:</strong> {{ ship.fuel_current }}</p>
+            <p><strong>Capacity:</strong> {{ ship.fuel_capacity }}</p>
+            <p><strong>Consumed:</strong> {{ ship.fuel_consumed.amount }}</p>
+        </div>
+
+
+        <div class="ship">
+            <h3 style="text-align: center;">CARGO</h3>
+            <p><strong>Used:</strong> {{ ship.cargo_units }} / {{ ship.cargo_capacity }}</p>
+
+            {% if ship.cargo_inventory %}
+                <ul>
+                    {% for item in ship.cargo_inventory %}
+                        <li>{{ item.symbol }} — {{ item.units }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No cargo onboard.</p>
+            {% endif %}
+        </div>
+
+
+        <div class="ship">
+            <h3 style="text-align: center;">COMPONENTS</h3>
+            <p><strong>Frame:</strong> {{ ship.frame.name }}</p>
+            <p><strong>Reactor:</strong> {{ ship.reactor.name }}</p>
+            <p><strong>Engine:</strong> {{ ship.engine.name }}</p>
+        </div>
+
+  
+        <div class="ship">
+            <h3 style="text-align: center;">MODULES</h3>
+            {% if ship.modules %}
+                <ul>
+                    {% for m in ship.modules %}
+                        <li>{{ m.name }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No modules installed.</p>
+            {% endif %}
+        </div>
+
+
+        <div class="ship">
+            <h3 style="text-align: center;">MOUNTS</h3>
+            {% if ship.mounts %}
+                <ul>
+                    {% for m in ship.mounts %}
+                        <li>{{ m.name }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No mounts installed.</p>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <br>
+    <a href="{{ url_for('summary') }}">Back to Summary</a>
+
+</body>
+</html>

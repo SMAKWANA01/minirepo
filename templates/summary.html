@@ -52,6 +52,7 @@
                 </form>
             {% endif %}
 
+            <a href="{{ url_for('contracts_page', contract_id=contract.id) }}" style="font-weight: bold; width:100%">View Contract Details</a>
 
         </div>
         {% endfor %}
@@ -65,15 +66,13 @@
             <p> Fuel: {{ ship.fuel_current }} / {{ ship.fuel_capacity }}</p>
             <p> Cargo: {{ ship.cargo_units }} / {{ ship.cargo_capacity }}</p>
             <p> Engine Speed: {{ ship.engine.speed }}</p>
-            
+
+            <a href="{{ url_for('ship_details', ship_symbol=ship.symbol) }}">View Ship Details</a>
+        
         </div>
         {% endfor %}
 
     </div>
 
-    <a href={{ url_for("fulfill_contract", contract_id=agent.contracts[0].id) }}>Fulfill Contract</a>
-
-    <a href={{ url_for("index")}}>index</a>
-    <a href={{ url_for("error")}}>error</a>
 </body>
 </html>
